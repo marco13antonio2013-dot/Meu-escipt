@@ -1,0 +1,514 @@
+-- LocalScript -> StarterPlayer > StarterPlayerScripts (teste no SEU jogo, no Studio)
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+
+local lp = Players.LocalPlayer
+
+-- >>> COLOQUE AQUI o ID da sua imagem de anime (veja instruções) <<<
+local IMAGEM_ID = "rbxassetid://0"
+
+local cfg = {
+-- Aimbot
+Aimbot = false,
+Modo = "Normal", -- "Normal" ou "Agressivo"
+Parte = "Cabeça", -- "Cabeça" ou "Peito"
+MostrarFOV = true,
+-- ESP
+ESP = false,
+Contorno = true,
+Linha = true,
+Nome = true,
+OrigemLinha = "Baixo", -- "Baixo", "Centro", "Mouse"
+-- Geral
+TeamCheck = true,
+Cor = Color3.fromRGB(255, 0, 0),
+Arco = false,
+}
+
+local modos = {
+-- Normal: só trava quando o inimigo está na mira e visível (sem parede)
+Normal = { FOV = 60, Suavidade = 0.35, Parede = true, PorAngulo = false },
+-- Agressivo: trava forte, instantâneo, atravessa parede e pega inimigo em qualquer direção
+Agressivo = { FOV = math.huge, Suavidade = 1, Parede = false, PorAngulo = true },
+}
+
+local cores = {
+Color3.fromRGB(255, 0, 0), Color3.fromRGB(0, 255, 0), Color3.fromRGB(0, 120, 255),
+Color3.fromRGB(255, 255, 0), Color3.fromRGB(170, 0, 255), Color3.fromRGB(0, 255, 255),
+Color3.fromRGB(255, 140, 0), Color3.fromRGB(255, 255, 255), Color3.fromRGB(255, 80, 200),
+Color3.fromRGB(120, 255, 120),
+}
+
+---------------------------------------------------------------- GUI base
+local gui = Instance.new("ScreenGui")
+gui.Name = "MarcoHub"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true -- coordenadas da tela = coordenadas do mouse
+gui.DisplayOrder = 999
+gui.Parent = lp:WaitForChild("PlayerGui")
+
+local BG, CARD, BORDA = Color3.fromRGB(0, 0, 0), Color3.fromRGB(18, 18, 18), Color3.fromRGB(55, 55, 55)
+local ACCENT = Color3.fromRGB(0, 255, 120)
+
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 480, 0, 330)
+main.Position = UDim2.new(0.5, -240, 0.5, -165)
+main.BackgroundColor3 = BG
+main.BorderSizePixel = 0
+main.Active = true
+main.Draggable = true
+main.Parent = gui
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
+local ms = Instance.new("UIStroke", main)
+ms.Color = ACCENT
+ms.Thickness = 2
+
+-- imagem de fundo (anime)
+local fundo = Instance.new("ImageLabel")
+fundo.Size = UDim2.new(1, 0, 1, 0)
+fundo.BackgroundTransparency = 1
+fundo.Image = IMAGEM_ID
+fundo.ImageTransparency = 0.35
+fundo.ScaleType = Enum.ScaleType.Crop
+fundo.ZIndex = 0
+fundo.Parent = main
+Instance.new("UICorner", fundo).CornerRadius = UDim.new(0, 8)
+
+-- escurece um pouco embaixo para o texto ficar legível
+local sombra = Instance.new("Frame")
+sombra.Size = UDim2.new(1, 0, 1, 0)
+sombra.BackgroundColor3 = Color3.new(0, 0, 0)
+sombra.BackgroundTransparency = 0.55
+sombra.BorderSizePixel = 0
+sombra.ZIndex = 0
+sombra.Parent = main
+Instance.new("UICorner", sombra).CornerRadius = UDim.new(0, 8)
+local sg = Instance.new("UIGradient", sombra)
+sg.Rotation = 90
+sg.Transparency = NumberSequence.new({
+NumberSequenceKeypoint.new(0, 0.75),
+NumberSequenceKeypoint.new(1, 0.25),
+})
+
+-- borda neon que muda de cor
+RunService.RenderStepped:Connect(function()
+ms.Color = Color3.fromHSV((tick() % 4) / 4, 0.75, 1)
+end)
+
+local titulo = Instance.new("TextLabel")
+titulo.Size = UDim2.new(1, -20, 0, 32)
+titulo.Position = UDim2.new(0, 12, 0, 0)
+titulo.BackgroundTransparency = 1
+titulo.Text = "MARCO HUB   |   RightShift: esconder"
+titulo.TextXAlignment = Enum.TextXAlignment.Left
+titulo.TextColor3 = Color3.new(1, 1, 1)
+titulo.Font = Enum.Font.GothamBold
+titulo.TextSize = 18
+titulo.Parent = main
+local tg = Instance.new("UIGradient", titulo)
+tg.Color = ColorSequence.new({
+ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 200)),
+ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
+ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 255, 255)),
+})
+RunService.RenderStepped:Connect(function()
+tg.Offset = Vector2.new(math.sin(tick() * 1.5) * 0.4, 0)
+end)
+
+-- barra de abas (em cima)
+local barra = Instance.new("Frame")
+barra.Size = UDim2.new(1, -20, 0, 30)
+barra.Position = UDim2.new(0, 10, 0, 32)
+barra.BackgroundTransparency = 1
+barra.Parent = main
+local bl = Instance.new("UIListLayout", barra)
+bl.FillDirection = Enum.FillDirection.Horizontal
+bl.Padding = UDim.new(0, 6)
+
+local linhaSep = Instance.new("Frame")
+linhaSep.Size = UDim2.new(1, -20, 0, 1)
+linhaSep.Position = UDim2.new(0, 10, 0, 65)
+linhaSep.BackgroundColor3 = BORDA
+linhaSep.BorderSizePixel = 0
+linhaSep.Parent = main
+
+local paginas, abas = {}, {}
+
+local function novaAba(nome)
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0, 108, 1, 0)
+btn.BackgroundColor3 = CARD
+btn.BackgroundTransparency = 0.25
+btn.BorderSizePixel = 0
+btn.Text = nome
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 13
+btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+btn.Parent = barra
+Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+local pg = Instance.new("ScrollingFrame")
+pg.Size = UDim2.new(1, -20, 1, -80)
+pg.Position = UDim2.new(0, 10, 0, 72)
+pg.BackgroundTransparency = 1
+pg.BorderSizePixel = 0
+pg.ScrollBarThickness = 3
+pg.CanvasSize = UDim2.new(0, 0, 0, 0)
+pg.AutomaticCanvasSize = Enum.AutomaticSize.Y
+pg.Visible = false
+pg.Parent = main
+local l = Instance.new("UIListLayout", pg)
+l.Padding = UDim.new(0, 6)
+
+paginas[nome], abas[nome] = pg, btn
+btn.MouseButton1Click:Connect(function()
+for n, p in pairs(paginas) do
+p.Visible = (n == nome)
+abas[n].TextColor3 = (n == nome) and ACCENT or Color3.fromRGB(150, 150, 150)
+end
+end)
+return pg
+end
+
+local function linha(pg)
+local f = Instance.new("Frame")
+f.Size = UDim2.new(1, -6, 0, 32)
+f.BackgroundColor3 = CARD
+f.BackgroundTransparency = 0.3
+f.BorderSizePixel = 0
+f.Parent = pg
+Instance.new("UICorner", f).CornerRadius = UDim.new(0, 6)
+return f
+end
+
+local function rotulo(f, texto)
+local t = Instance.new("TextLabel")
+t.Size = UDim2.new(0.6, 0, 1, 0)
+t.Position = UDim2.new(0, 10, 0, 0)
+t.BackgroundTransparency = 1
+t.Text = texto
+t.TextXAlignment = Enum.TextXAlignment.Left
+t.TextColor3 = Color3.new(1, 1, 1)
+t.Font = Enum.Font.Gotham
+t.TextSize = 13
+t.Parent = f
+return t
+end
+
+local function botaoDireita(f, texto, w)
+local b = Instance.new("TextButton")
+b.Size = UDim2.new(0, w or 60, 0, 22)
+b.Position = UDim2.new(1, -(w or 60) - 8, 0.5, -11)
+b.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+b.BorderSizePixel = 0
+b.Text = texto
+b.TextColor3 = Color3.new(1, 1, 1)
+b.Font = Enum.Font.GothamBold
+b.TextSize = 12
+b.Parent = f
+Instance.new("UICorner", b).CornerRadius = UDim.new(0, 5)
+return b
+end
+
+local function toggle(pg, nome, chave)
+local f = linha(pg)
+rotulo(f, nome)
+local b = botaoDireita(f, "")
+local function ref()
+b.Text = cfg[chave] and "ON" or "OFF"
+b.BackgroundColor3 = cfg[chave] and Color3.fromRGB(0, 140, 70) or Color3.fromRGB(35, 35, 35)
+end
+ref()
+b.MouseButton1Click:Connect(function() cfg[chave] = not cfg[chave] ref() end)
+end
+
+local function ciclo(pg, nome, chave, opcoes)
+local f = linha(pg)
+rotulo(f, nome)
+local b = botaoDireita(f, cfg[chave], 90)
+b.MouseButton1Click:Connect(function()
+local i = table.find(opcoes, cfg[chave]) or 1
+cfg[chave] = opcoes[i % #opcoes + 1]
+b.Text = cfg[chave]
+end)
+end
+
+local function passo(pg, nome, chave, delta, minimo, maximo, casas)
+local f = linha(pg)
+rotulo(f, nome)
+local mais = botaoDireita(f, "+", 26)
+local val = Instance.new("TextLabel")
+val.Size = UDim2.new(0, 46, 0, 22)
+val.Position = UDim2.new(1, -8 - 26 - 4 - 46, 0.5, -11)
+val.BackgroundTransparency = 1
+val.TextColor3 = ACCENT
+val.Font = Enum.Font.GothamBold
+val.TextSize = 12
+val.Parent = f
+local menos = botaoDireita(f, "-", 26)
+menos.Position = UDim2.new(1, -8 - 26 - 4 - 46 - 4 - 26, 0.5, -11)
+local function ref() val.Text = string.format("%." .. (casas or 0) .. "f", cfg[chave]) end
+ref()
+mais.MouseButton1Click:Connect(function() cfg[chave] = math.min(maximo, cfg[chave] + delta) ref() end)
+menos.MouseButton1Click:Connect(function() cfg[chave] = math.max(minimo, cfg[chave] - delta) ref() end)
+end
+
+---------------------------------------------------------------- Abas
+local pAim = novaAba("Aimbot")
+toggle(pAim, "Aimbot ligado", "Aimbot")
+ciclo(pAim, "Modo", "Modo", { "Normal", "Agressivo" })
+ciclo(pAim, "Mirar em", "Parte", { "Cabeça", "Peito" })
+toggle(pAim, "Mostrar círculo FOV", "MostrarFOV")
+do
+local f = linha(pAim)
+f.Size = UDim2.new(1, -6, 0, 62)
+local t = rotulo(f, "Normal: trava só se o inimigo estiver na mira e visível.\nAgressivo: trava forte, atrás da parede e em qualquer direção.")
+t.Size = UDim2.new(1, -20, 1, 0)
+t.TextWrapped = true
+t.TextSize = 12
+t.TextColor3 = Color3.fromRGB(170, 170, 170)
+end
+
+local pEsp = novaAba("ESP")
+toggle(pEsp, "ESP ligado", "ESP")
+toggle(pEsp, "Contorno", "Contorno")
+toggle(pEsp, "Linha (tracer)", "Linha")
+toggle(pEsp, "Nome / Distância / Vida", "Nome")
+ciclo(pEsp, "Origem da linha", "OrigemLinha", { "Baixo", "Centro", "Mouse" })
+
+local pCor = novaAba("Cores")
+do
+local f = linha(pCor)
+f.Size = UDim2.new(1, -6, 0, 80)
+local g = Instance.new("Frame")
+g.Size = UDim2.new(1, -16, 1, -16)
+g.Position = UDim2.new(0, 8, 0, 8)
+g.BackgroundTransparency = 1
+g.Parent = f
+local gl = Instance.new("UIGridLayout", g)
+gl.CellSize = UDim2.new(0, 36, 0, 28)
+gl.CellPadding = UDim2.new(0, 6, 0, 6)
+for _, cor in ipairs(cores) do
+local c = Instance.new("TextButton")
+c.Text = ""
+c.BackgroundColor3 = cor
+c.BorderSizePixel = 0
+c.Parent = g
+Instance.new("UICorner", c).CornerRadius = UDim.new(0, 6)
+c.MouseButton1Click:Connect(function() cfg.Cor = cor cfg.Arco = false end)
+end
+end
+toggle(pCor, "Arco-íris", "Arco")
+
+local pCfg = novaAba("Config")
+toggle(pCfg, "Team Check (ignorar meu time)", "TeamCheck")
+
+abas["Aimbot"].TextColor3 = ACCENT
+paginas["Aimbot"].Visible = true
+
+UIS.InputBegan:Connect(function(i, gp)
+if not gp and i.KeyCode == Enum.KeyCode.RightShift then main.Visible = not main.Visible end
+end)
+
+---------------------------------------------------------------- Utilidades
+local function corAtual()
+return cfg.Arco and Color3.fromHSV((tick() % 5) / 5, 1, 1) or cfg.Cor
+end
+
+local function valido(plr)
+if plr == lp then return false end
+if cfg.TeamCheck and lp.Team ~= nil and plr.Team == lp.Team then return false end
+local c = plr.Character
+local h = c and c:FindFirstChildOfClass("Humanoid")
+return h ~= nil and h.Health > 0 and c:FindFirstChild("HumanoidRootPart") ~= nil
+end
+
+local function parteAlvo(char)
+if cfg.Parte == "Cabeça" then
+return char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+end
+return char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso") or char:FindFirstChild("HumanoidRootPart")
+end
+
+---------------------------------------------------------------- ESP
+local esp = {} -- [player] = {hl, linha, bb, txt}
+
+local function criarESP(plr)
+local d = {}
+d.linha = Instance.new("Frame")
+d.linha.AnchorPoint = Vector2.new(0.5, 0.5)
+d.linha.BorderSizePixel = 0
+d.linha.Visible = false
+d.linha.Parent = gui
+
+d.hl = Instance.new("Highlight")
+d.hl.FillTransparency = 0.55
+d.hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+d.hl.Enabled = false
+d.hl.Parent = gui -- Adornee definido depois
+
+d.txt = Instance.new("TextLabel")
+d.txt.AnchorPoint = Vector2.new(0.5, 1)
+d.txt.Size = UDim2.new(0, 160, 0, 30)
+d.txt.BackgroundTransparency = 1
+d.txt.Font = Enum.Font.GothamBold
+d.txt.TextSize = 12
+d.txt.TextStrokeTransparency = 0.4
+d.txt.Visible = false
+d.txt.Parent = gui
+
+esp[plr] = d
+return d
+end
+
+local function limparESP(plr)
+local d = esp[plr]
+if d then
+d.linha:Destroy() d.hl:Destroy() d.txt:Destroy()
+esp[plr] = nil
+end
+end
+Players.PlayerRemoving:Connect(limparESP)
+
+local function origemLinha(cam)
+local tela = cam.ViewportSize
+if cfg.OrigemLinha == "Baixo" then return Vector2.new(tela.X / 2, tela.Y)
+elseif cfg.OrigemLinha == "Centro" then return tela / 2 end
+return UIS:GetMouseLocation()
+end
+
+local function atualizarESP(cam)
+local cor = corAtual()
+for _, plr in ipairs(Players:GetPlayers()) do
+if plr ~= lp then
+local d = esp[plr] or criarESP(plr)
+if cfg.ESP and valido(plr) then
+local char = plr.Character
+local root = char.HumanoidRootPart
+local hum = char:FindFirstChildOfClass("Humanoid")
+
+-- contorno
+d.hl.Adornee = char
+d.hl.FillColor, d.hl.OutlineColor = cor, cor
+d.hl.Enabled = cfg.Contorno
+
+local pos, visivel = cam:WorldToViewportPoint(root.Position)
+-- linha
+if cfg.Linha and visivel then
+local a, b = origemLinha(cam), Vector2.new(pos.X, pos.Y)
+local v = b - a
+d.linha.Size = UDim2.new(0, v.Magnitude, 0, 2)
+d.linha.Position = UDim2.new(0, (a.X + b.X) / 2, 0, (a.Y + b.Y) / 2)
+d.linha.Rotation = math.deg(math.atan2(v.Y, v.X))
+d.linha.BackgroundColor3 = cor
+d.linha.Visible = true
+else
+d.linha.Visible = false
+end
+-- texto
+if cfg.Nome and visivel then
+local dist = (cam.CFrame.Position - root.Position).Magnitude
+d.txt.Text = string.format("%s\n[%dm] [%d HP]", plr.DisplayName, dist, hum.Health)
+d.txt.TextColor3 = cor
+local topo = cam:WorldToViewportPoint(root.Position + Vector3.new(0, 3.2, 0))
+d.txt.Position = UDim2.new(0, topo.X, 0, topo.Y)
+d.txt.Visible = true
+else
+d.txt.Visible = false
+end
+else
+d.hl.Enabled, d.linha.Visible, d.txt.Visible = false, false, false
+end
+end
+end
+end
+
+---------------------------------------------------------------- Aimbot (Normal / Agressivo)
+local circulo = Instance.new("Frame")
+circulo.AnchorPoint = Vector2.new(0.5, 0.5)
+circulo.BackgroundTransparency = 1
+circulo.Parent = gui
+Instance.new("UICorner", circulo).CornerRadius = UDim.new(1, 0)
+local cstroke = Instance.new("UIStroke", circulo)
+cstroke.Thickness = 1.5
+
+local alvoAtual = nil
+
+local function semParede(cam, parte, char)
+local p = RaycastParams.new()
+p.FilterType = Enum.RaycastFilterType.Exclude
+p.FilterDescendantsInstances = { lp.Character }
+local r = workspace:Raycast(cam.CFrame.Position, parte.Position - cam.CFrame.Position, p)
+return r == nil or r.Instance:IsDescendantOf(char)
+end
+
+local function distMira(cam, parte)
+local pos, vis = cam:WorldToViewportPoint(parte.Position)
+if not vis then return math.huge end
+return (Vector2.new(pos.X, pos.Y) - UIS:GetMouseLocation()).Magnitude
+end
+
+local function angulo(cam, parte)
+local dir = (parte.Position - cam.CFrame.Position).Unit
+return math.acos(math.clamp(cam.CFrame.LookVector:Dot(dir), -1, 1))
+end
+
+-- retorna a "pontuação" do alvo (menor = melhor) ou nil se não serve
+local function pontuar(cam, plr, m)
+local parte = parteAlvo(plr.Character)
+if not parte then return nil end
+if m.Parede and not semParede(cam, parte, plr.Character) then return nil end
+if m.PorAngulo then
+return angulo(cam, parte)
+end
+local d = distMira(cam, parte)
+return d <= m.FOV and d or nil
+end
+
+local function escolherAlvo(cam, m)
+-- Agressivo: mantém o alvo até ele morrer. Normal: só enquanto estiver na mira.
+if alvoAtual and valido(alvoAtual) then
+if m.PorAngulo then return alvoAtual end
+local parte = parteAlvo(alvoAtual.Character)
+if parte and distMira(cam, parte) <= m.FOV * 1.3 and semParede(cam, parte, alvoAtual.Character) then
+return alvoAtual
+end
+end
+local melhor, menor = nil, math.huge
+for _, plr in ipairs(Players:GetPlayers()) do
+if valido(plr) then
+local s = pontuar(cam, plr, m)
+if s and s < menor then menor, melhor = s, plr end
+end
+end
+return melhor
+end
+
+local function aimStep()
+local cam = workspace.CurrentCamera
+local m = modos[cfg.Modo]
+local mouse = UIS:GetMouseLocation()
+
+circulo.Visible = cfg.Aimbot and cfg.MostrarFOV and not m.PorAngulo
+if m.FOV ~= math.huge then
+circulo.Size = UDim2.new(0, m.FOV * 2, 0, m.FOV * 2)
+end
+circulo.Position = UDim2.new(0, mouse.X, 0, mouse.Y)
+cstroke.Color = corAtual()
+
+if not cfg.Aimbot then alvoAtual = nil return end
+alvoAtual = escolherAlvo(cam, m)
+if alvoAtual then
+local parte = parteAlvo(alvoAtual.Character)
+local olhar = CFrame.new(cam.CFrame.Position, parte.Position)
+cam.CFrame = (m.Suavidade >= 1) and olhar or cam.CFrame:Lerp(olhar, m.Suavidade)
+end
+end
+
+-- roda DEPOIS da câmera do Roblox para ela não sobrescrever a mira
+RunService:BindToRenderStep("MarcoHubAim", Enum.RenderPriority.Camera.Value + 1, function()
+local cam = workspace.CurrentCamera
+atualizarESP(cam)
+aimStep()
+end)
